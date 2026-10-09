@@ -1,0 +1,96 @@
+# 小信助手服务端配置文件
+# 也可通过环境变量覆盖：XX_DATABASE_URL、XX_SECRET_KEY、XX_LLM_API_KEY
+
+server:
+  host: 0.0.0.0
+  port: 8000
+  secret_key: "please-change-me-xiaoxin-2025"
+  token_expire_hours: 24
+  upload_dir: ./data/uploads
+  seed_demo: true               # 首次启动写入演示数据（终端/工单/案例），生产环境可设为 false
+
+database:
+  # PostgreSQL 连接串（psycopg2 驱动）
+  url: "postgresql+psycopg2://xiaoxin:xiaoxin123@127.0.0.1:5432/xiaoxin"
+  pool_size: 10
+  echo: false
+
+# ---------------- 大模型参数（首次启动写入数据库，之后可在管理端“模型管理”中动态修改，无需重启） ----------------
+llm:
+  default_models:
+    - name: DeepSeek-Chat
+      provider: deepseek            # deepseek / openai / qwen / telechat(星辰) / mock
+      base_url: https://api.deepseek.com/v1
+      api_key: ""                   # 在此填写 DeepSeek API Key，或在管理端配置
+      model: deepseek-chat
+      temperature: 0.7
+      top_p: 0.95
+      max_tokens: 2048
+      timeout: 60
+      priority: 1                   # 数字越小优先级越高（路由降级顺序）
+      enabled: true
+      is_default: true
+    - name: DeepSeek-Reasoner
+      provider: deepseek
+      base_url: https://api.deepseek.com/v1
+      api_key: ""
+      model: deepseek-reasoner
+      temperature: 0.6
+      top_p: 0.95
+      max_tokens: 4096
+      timeout: 120
+      priority: 2
+      enabled: false
+    - name: Qwen-Plus
+      provider: qwen
+      base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      api_key: ""
+      model: qwen-plus
+      priority: 3
+      enabled: false
+    - name: 星辰大模型(TeleChat)
+      provider: telechat
+      base_url: http://127.0.0.1:8080/v1
+      api_key: ""
+      model: telechat
+      priority: 4
+      enabled: false
+    - name: 本地兜底(Mock)
+      provider: mock
+      base_url: ""
+      model: mock
+      priority: 99
+      enabled: true
+  # 路由策略：priority(优先级+自动降级) / round_robin(轮询) / weighted(加权) / scene(按业务场景)
+  route_strategy: priority
+  # 多轮会话
+  session_timeout_minutes: 60       # 会话超时销毁
+  context_window_rounds: 6          # 滑动窗口保留轮数
+  context_strategy: window          # window(滑动窗口) / summary(超出部分摘要)
+
+# 向量化（DeepSeek 无 embedding 接口，默认使用内置 local 哈希向量；可改为 BGE/m3e 的 OpenAI 兼容服务）
+embedding:
+  provider: local                   # local / api
+  base_url: http://127.0.0.1:9997/v1
+  api_key: ""
+  model: bge-m3
+  dim: 512
+
+rag:
+  chunk_size: 500
+  chunk_overlap: 80
+  top_k: 5
+  score_threshold: 0.05
+  search_mode: hybrid               # vector / keyword / hybrid
+  hybrid_alpha: 0.6                 # 向量得分权重
+
+# OCR（可选）：tesseract 命令行或 OCR HTTP 服务
+ocr:
+  provider: none                    # none / tesseract / api
+  tesseract_cmd: tesseract
+  api_url: ""
+
+# 模型微调：配置了训练命令（如 LLaMA-Factory）则真实执行，否则模拟训练过程
+finetune:
+  train_command: ""                 # 例：llamafactory-cli train {config}
+  output_dir: ./data/finetune

@@ -1,0 +1,4 @@
+# 小信助手桌面客户端依赖（界面使用 Python 自带 Tkinter，通信仅用标准库）
+psutil>=5.9
+# 打包用
+pyinstaller>=5.13

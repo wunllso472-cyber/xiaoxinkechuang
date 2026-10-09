@@ -1,0 +1,25 @@
+# docker compose up -d   （镜像 postgres:16 与 python:3.11-slim 均支持 arm64）
+services:
+  db:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_USER: xiaoxin
+      POSTGRES_PASSWORD: xiaoxin123
+      POSTGRES_DB: xiaoxin
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+  server:
+    build: .
+    restart: always
+    depends_on: [db]
+    ports:
+      - "8000:8000"
+    environment:
+      XX_DATABASE_URL: postgresql+psycopg2://xiaoxin:xiaoxin123@db:5432/xiaoxin
+      # XX_LLM_API_KEY: sk-xxxx   # DeepSeek API Key，也可在管理端配置
+    volumes:
+      - uploads:/opt/xiaoxin/data/uploads
+volumes:
+  pgdata:
+  uploads:

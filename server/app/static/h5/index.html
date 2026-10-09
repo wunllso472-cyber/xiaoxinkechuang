@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>小信运维</title>
+  <link rel="stylesheet" href="/vendor/vant.css">
+  <style>
+    body { margin: 0; background: #f5f6f8; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    .page { min-height: 100vh; padding-bottom: 60px; box-sizing: border-box; }
+    .login { padding: 80px 24px 0; }
+    .login h1 { color: #1d5bd8; font-size: 26px; margin: 0 0 6px; }
+    .login p { color: #969799; margin: 0 0 32px; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); background: linear-gradient(135deg, #1d5bd8, #29c5a6); color: #fff; padding: 16px 8px; text-align: center; }
+    .stats b { display: block; font-size: 22px; }
+    .stats span { font-size: 12px; opacity: .85; }
+    .tk { margin: 10px 12px; background: #fff; border-radius: 10px; padding: 12px 14px; }
+    .tk .t { font-size: 15px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+    .tk .s { color: #969799; font-size: 12px; margin-top: 6px; }
+    .actions { position: fixed; bottom: 0; left: 0; right: 0; display: flex; gap: 8px; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); background: #fff; box-shadow: 0 -2px 8px rgba(0,0,0,.05); }
+    .actions .van-button { flex: 1; }
+    .log { font-size: 13px; }
+  </style>
+</head>
+<body>
+<div id="app"></div>
+<script src="/vendor/vue.global.prod.js"></script>
+<script src="/vendor/vant.min.js"></script>
+<script>
+const { ref, reactive, computed, onMounted } = Vue;
+const { showToast, showConfirmDialog, showSuccessToast, showFailToast } = vant;
+const S = reactive({ token: localStorage.getItem('h5_token') || '', user: JSON.parse(localStorage.getItem('h5_user') || 'null') });
+
+async function api(url, method, body) {
+  const h = { 'Content-Type': 'application/json' };
+  if (S.token) h.Authorization = 'Bearer ' + S.token;
+  const r = await fetch(url, { method: method || (body ? 'POST' : 'GET'), headers: h, body: body ? JSON.stringify(body) : undefined });
+  if (r.status === 401) { S.token = ''; localStorage.removeItem('h5_token'); throw new Error('请重新登录'); }
+  const d = await r.json();
+  if (!r.ok) { showFailToast(d.detail || '操作失败'); throw new Error(d.detail); }
+  return d;
+}
+const STYPE = { 待签收: 'warning', 处理中: 'primary', 挂起审核中: 'danger', 待评价: 'success', 已办结: 'success' };
+
+const App = {
+  setup() {
+    const view = ref('list'); const tab = ref('todo'); const list = ref([]); const stats = ref({}); const kw = ref('');
+    const cur = ref(null); const colleagues = ref([]);
+    const lf = reactive({ username: '', password: '' });
+    const pop = reactive({ transfer: false, suspend: false, info: false, feedback: false });
+    const form = reactive({ assignee: null, reason: '', days: 1, solution: '', feedback: '', info: {} });
+    const sup = reactive({ title: '', description: '', category: '终端故障', reporter: '', reporter_phone: '', address: '', device_info: '', solution: '', feedback: '' });
+
+    const login = async () => {
+      const r = await api('/api/login', 'POST', lf);
+      S.token = r.token; S.user = r.user; localStorage.setItem('h5_token', r.token); localStorage.setItem('h5_user', JSON.stringify(r.user)); load();
+    };
+    const logout = () => { S.token = ''; localStorage.removeItem('h5_token'); };
+    const load = async () => {
+      list.value = await api('/api/mobile/tickets?tab=' + tab.value + '&keyword=' + encodeURIComponent(kw.value));
+      stats.value = await api('/api/mobile/stats');
+    };
+    const open = async (t) => { cur.value = await api('/api/ops/tickets/' + t.id); view.value = 'detail'; };
+    const refresh = async () => { cur.value = await api('/api/ops/tickets/' + cur.value.id); load(); };
+    const sign = async () => {
+      await showConfirmDialog({ title: '工单签收', message: '确认签收工单 ' + cur.value.ticket_no + '？' });
+      await api('/api/mobile/tickets/' + cur.value.id + '/sign', 'POST', {}); showSuccessToast('签收成功'); refresh();
+    };
+    const openTransfer = async () => { colleagues.value = await api('/api/mobile/colleagues'); form.assignee = null; form.reason = ''; pop.transfer = true; };
+    const doTransfer = async () => {
+      if (!form.assignee) return showToast('请选择转派对象');
+      await api('/api/mobile/tickets/' + cur.value.id + '/transfer', 'POST', { assignee_id: form.assignee, reason: form.reason });
+      pop.transfer = false; showSuccessToast('已转派'); view.value = 'list'; load();
+    };
+    const doSuspend = async () => {
+      if (!form.reason) return showToast('请填写挂起原因');
+      await api('/api/mobile/tickets/' + cur.value.id + '/suspend', 'POST', { reason: form.reason, days: form.days });
+      pop.suspend = false; showSuccessToast('已提交挂起申请，待客服审核'); refresh();
+    };
+    const openInfo = () => { const t = cur.value; form.info = { title: t.title, description: t.description, reporter: t.reporter, reporter_phone: t.reporter_phone, dept: t.dept, address: t.address, device_info: t.device_info }; pop.info = true; };
+    const doInfo = async () => { await api('/api/mobile/tickets/' + cur.value.id + '/info', 'PUT', form.info); pop.info = false; showSuccessToast('已保存'); refresh(); };
+    const doFeedback = async () => {
+      if (!form.solution) return showToast('请填写处理结果');
+      await api('/api/mobile/tickets/' + cur.value.id + '/feedback', 'POST', { solution: form.solution, feedback: form.feedback });
+      pop.feedback = false; showSuccessToast('反馈成功，等待用户评价'); refresh();
+    };
+    const doSupplement = async () => {
+      if (!sup.title || !sup.solution) return showToast('请填写问题和处理结果');
+      const t = await api('/api/mobile/tickets/supplement', 'POST', sup);
+      showSuccessToast('补录成功 ' + t.ticket_no); Object.keys(sup).forEach(k => sup[k] = k === 'category' ? '终端故障' : ''); view.value = 'list'; tab.value = 'done'; load();
+    };
+    onMounted(() => { if (S.token) load().catch(() => {}); });
+    return { S, view, tab, list, stats, kw, cur, lf, login, logout, load, open, sign, openTransfer, doTransfer, doSuspend, openInfo, doInfo, doFeedback, doSupplement, pop, form, colleagues, sup, STYPE };
+  },
+  template: `
+  <div v-if="!S.token" class="login"><h1>小信运维</h1><p>运维人员移动工单处置</p>
+    <van-cell-group inset><van-field v-model="lf.username" label="账号" placeholder="请输入账号"/><van-field v-model="lf.password" type="password" label="密码" placeholder="请输入密码"/></van-cell-group>
+    <div style="margin:24px 16px"><van-button round block type="primary" @click="login">登录</van-button></div></div>
+
+  <div v-else-if="view==='list'" class="page">
+    <van-nav-bar title="我的工单"><template #right><span @click="logout" style="font-size:13px;color:#1d5bd8">退出</span></template></van-nav-bar>
+    <div class="stats"><div><b>{{stats.to_sign||0}}</b><span>待签收</span></div><div><b>{{stats.processing||0}}</b><span>处理中</span></div><div><b>{{stats.suspending||0}}</b><span>挂起审核</span></div><div><b>{{stats.done||0}}</b><span>已办</span></div></div>
+    <van-search v-model="kw" placeholder="工单号/标题" @search="load"/>
+    <van-tabs v-model:active="tab" @change="load"><van-tab title="待办" name="todo"/><van-tab title="已办" name="done"/><van-tab title="全部" name="all"/></van-tabs>
+    <van-pull-refresh :model-value="false" @refresh="load">
+      <van-empty v-if="!list.length" description="暂无工单"/>
+      <div v-for="t in list" :key="t.id" class="tk" @click="open(t)">
+        <div class="t"><span>{{t.title}}</span><van-tag :type="STYPE[t.status]||'default'">{{t.status}}</van-tag></div>
+        <div class="s">{{t.ticket_no}} · {{t.category}} · {{t.reporter}} {{t.address}}</div>
+        <div class="s">期限 {{t.deadline}}</div></div>
+    </van-pull-refresh>
+    <van-tabbar :model-value="0"><van-tabbar-item icon="orders-o">工单</van-tabbar-item><van-tabbar-item icon="add-o" @click="view='supplement'">工单补录</van-tabbar-item></van-tabbar>
+  </div>
+
+  <div v-else-if="view==='detail' && cur" class="page" style="padding-bottom:80px">
+    <van-nav-bar title="工单详情" left-arrow @click-left="view='list'"/>
+    <van-cell-group inset style="margin-top:10px">
+      <van-cell title="工单号" :value="cur.ticket_no"/><van-cell title="状态"><template #value><van-tag :type="STYPE[cur.status]||'default'">{{cur.status}}</van-tag></template></van-cell>
+      <van-cell title="标题" :label="cur.title"/><van-cell title="问题描述" :label="cur.description || '无'"/>
+      <van-cell title="报修人" :value="cur.reporter + ' ' + cur.reporter_phone"/><van-cell title="部门/地点" :value="cur.dept + ' ' + cur.address"/>
+      <van-cell title="设备" :value="cur.device_info"/><van-cell title="反馈期限" :value="cur.deadline"/>
+      <van-cell v-if="cur.solution" title="处理结果" :label="cur.solution"/>
+    </van-cell-group>
+    <van-cell-group inset title="流转记录" style="margin-top:10px"><van-steps direction="vertical" :active="cur.logs.length-1">
+      <van-step v-for="l in cur.logs" :key="l.id"><div class="log">{{l.operator}} · {{l.action}}</div><div class="log" style="color:#969799">{{l.content}}</div><div style="font-size:12px;color:#c8c9cc">{{l.created_at}}</div></van-step></van-steps></van-cell-group>
+    <div class="actions" v-if="['待签收','处理中'].includes(cur.status)">
+      <van-button v-if="cur.status==='待签收'" type="primary" @click="sign">签收</van-button>
+      <van-button v-if="cur.status==='处理中'" plain type="primary" size="small" @click="openInfo">信息补充</van-button>
+      <van-button plain type="warning" size="small" @click="openTransfer">转派</van-button>
+      <van-button v-if="cur.status==='处理中'" plain type="danger" size="small" @click="form.reason='';pop.suspend=true">挂起</van-button>
+      <van-button v-if="cur.status==='处理中'" type="primary" size="small" @click="form.solution='';pop.feedback=true">反馈</van-button>
+    </div>
+
+    <van-popup v-model:show="pop.transfer" position="bottom" round style="padding:16px 0">
+      <div style="text-align:center;font-weight:600;margin-bottom:8px">转派工单</div>
+      <van-radio-group v-model="form.assignee"><van-cell-group inset>
+        <van-cell v-for="c in colleagues" :key="c.id" :title="c.name" :label="c.company" clickable @click="form.assignee=c.id"><template #right-icon><van-radio :name="c.id"/></template></van-cell>
+      </van-cell-group></van-radio-group>
+      <van-empty v-if="!colleagues.length" description="本保障站暂无其他运维人员"/>
+      <van-field v-model="form.reason" label="转派原因" placeholder="请输入原因"/>
+      <div style="margin:12px 16px"><van-button block type="primary" @click="doTransfer">确认转派</van-button></div></van-popup>
+
+    <van-popup v-model:show="pop.suspend" position="bottom" round style="padding:16px 0">
+      <div style="text-align:center;font-weight:600;margin-bottom:8px">工单挂起申请</div>
+      <van-field v-model="form.reason" type="textarea" rows="3" label="挂起原因" placeholder="如：等待配件到货"/>
+      <van-field label="延期天数"><template #input><van-stepper v-model="form.days" min="1" max="30"/></template></van-field>
+      <div style="margin:12px 16px"><van-button block type="danger" @click="doSuspend">提交审核</van-button></div></van-popup>
+
+    <van-popup v-model:show="pop.info" position="bottom" round style="padding:16px 0;max-height:80vh">
+      <div style="text-align:center;font-weight:600;margin-bottom:8px">核验/补充工单信息</div>
+      <van-field v-model="form.info.title" label="标题"/><van-field v-model="form.info.description" type="textarea" rows="2" label="描述"/>
+      <van-field v-model="form.info.reporter" label="报修人"/><van-field v-model="form.info.reporter_phone" label="电话"/>
+      <van-field v-model="form.info.dept" label="部门"/><van-field v-model="form.info.address" label="地点"/><van-field v-model="form.info.device_info" label="报修设备"/>
+      <div style="margin:12px 16px"><van-button block type="primary" @click="doInfo">保存</van-button></div></van-popup>
+
+    <van-popup v-model:show="pop.feedback" position="bottom" round style="padding:16px 0">
+      <div style="text-align:center;font-weight:600;margin-bottom:8px">工单反馈</div>
+      <van-field v-model="form.solution" type="textarea" rows="3" label="处理结果" placeholder="故障原因及解决方法"/>
+      <van-field v-model="form.feedback" type="textarea" rows="2" label="备注"/>
+      <div style="margin:12px 16px"><van-button block type="primary" @click="doFeedback">提交反馈</van-button></div></van-popup>
+  </div>
+
+  <div v-else-if="view==='supplement'" class="page">
+    <van-nav-bar title="工单补录" left-arrow @click-left="view='list'"/>
+    <van-cell-group inset title="已解决但未登记的工单">
+      <van-field v-model="sup.title" label="问题" required placeholder="问题标题"/><van-field v-model="sup.description" type="textarea" rows="2" label="描述"/>
+      <van-field v-model="sup.category" label="分类"/><van-field v-model="sup.reporter" label="报修人"/><van-field v-model="sup.reporter_phone" label="电话"/>
+      <van-field v-model="sup.address" label="地点"/><van-field v-model="sup.device_info" label="设备"/>
+      <van-field v-model="sup.solution" type="textarea" rows="3" label="处理结果" required/><van-field v-model="sup.feedback" label="备注"/>
+    </van-cell-group>
+    <div style="margin:16px"><van-button block type="primary" @click="doSupplement">提交补录</van-button></div>
+  </div>`,
+};
+Vue.createApp(App).use(vant).mount('#app');
+</script>
+</body>
+</html>

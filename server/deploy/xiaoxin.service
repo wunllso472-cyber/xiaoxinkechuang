@@ -1,0 +1,17 @@
+[Unit]
+Description=Xiaoxin Assistant Server (小信助手服务端)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=xiaoxin
+WorkingDirectory=/opt/xiaoxin
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/xiaoxin/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port __PORT__ --workers 1
+Restart=always
+RestartSec=5
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

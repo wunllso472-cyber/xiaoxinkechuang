@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+build/
+dist/
+*.spec
+
+# 日志
+*.log
+
+# 运行时数据（数据库、上传文件、微调任务产物）
+server/data/*
+!server/data/sample_kb.md
+!server/data/finetune_samples/
+
+# 敏感业务资料（合同、价格清单、客户内部资料），不入库
+*合同*.pdf
+附件1：价格清单.pdf
+无锡信创平台操作手册（总集管理员）.docx
+杭小信规范性问答0614初稿.xlsx
+问答对1改.csv
+
+# IDE / 系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
