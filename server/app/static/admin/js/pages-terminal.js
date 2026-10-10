@@ -253,10 +253,32 @@ Pages.records = {
     <el-pagination style="margin-top:12px" background layout="total, prev, pager, next" :total="total" v-model:current-page="q.page" @current-change="load"/></div></div>`,
 };
 
+const pkgName = (v) => v ? v.split(/[\\/]/).pop().replace(/^[0-9a-f]{8}_/, '') : '未上传';
 function uploadAction(kind) {
   return { label: '上传安装包', click: (row, load) => {
-    const inp = document.createElement('input'); inp.type = 'file';
-    inp.onchange = async () => { const fd = new FormData(); fd.append('file', inp.files[0]); ElMessage.info('上传中…'); await api('/api/admin/upload/' + kind + '/' + row.id, { method: 'POST', body: fd }); ElMessage.success('上传成功'); load(); };
+    // 文件框要挂到页面上：游离的 input 在用户挑选文件期间可能被浏览器回收，选完文件后就没有任何反应
+    const inp = document.createElement('input'); inp.type = 'file'; inp.style.display = 'none'; document.body.appendChild(inp);
+    inp.addEventListener('cancel', () => inp.remove());
+    inp.onchange = () => {
+      const file = inp.files[0]; inp.remove();
+      if (!file) return;
+      const tip = (pct) => '正在上传 ' + file.name + '（' + fmtSize(file.size) + '）' + pct + '，请勿关闭页面';
+      const loading = ElementPlus.ElLoading.service({ lock: true, text: tip(''), background: 'rgba(255,255,255,.75)' });
+      const done = (ok, msg) => { loading.close(); (ok ? ElMessage.success : ElMessage.error)({ message: msg, duration: ok ? 3000 : 8000, showClose: true }); if (ok) load(); };
+      const fd = new FormData(); fd.append('file', file);
+      const xhr = new XMLHttpRequest();  // 用 XHR 才能拿到上传进度
+      xhr.open('POST', '/api/admin/upload/' + kind + '/' + row.id);
+      xhr.setRequestHeader('Authorization', 'Bearer ' + store.token);
+      xhr.upload.onprogress = (e) => { if (e.lengthComputable) loading.setText(e.loaded < e.total ? tip(' ' + Math.floor(e.loaded / e.total * 100) + '%') : '文件已传完，服务器正在保存…'); };
+      xhr.onload = () => {
+        if (xhr.status === 200) return done(true, '上传成功：' + file.name);
+        let detail = ''; try { detail = JSON.parse(xhr.responseText).detail; } catch (e) { /* 非 JSON 响应 */ }
+        if (xhr.status === 401) { store.token = ''; localStorage.removeItem('xx_token'); }
+        done(false, '上传失败：' + (xhr.status === 401 ? '登录已过期，请重新登录' : (typeof detail === 'string' && detail) || ('服务器返回 ' + xhr.status)));
+      };
+      xhr.onerror = () => done(false, '上传失败：网络中断或服务器无响应');
+      xhr.send(fd);
+    };
     inp.click();
   } };
 }
@@ -266,7 +288,7 @@ Pages.versions = {
     return { cols: [{ prop: 'version', label: '版本号', required: true, placeholder: '如 1.2.0' }, { prop: 'platform', label: '平台', type: 'select', options: opts([['linux', 'Linux(Ubuntu/麒麟/统信)'], ['windows', 'Windows']]) },
       { prop: 'arch', label: '架构', type: 'select', options: opts([['all', '全部'], ['x86_64', 'x86_64(海光/兆芯)'], ['aarch64', 'aarch64(飞腾/鲲鹏)']]) },
       { prop: 'status', label: '状态', type: 'select', options: opts(['草稿', '灰度', '已发布', '已下线']), tag: v => v === '已发布' ? 'success' : 'info' }, { prop: 'force_update', label: '强制更新', type: 'bool' },
-      { prop: 'changelog', label: '变更说明', type: 'textarea', minWidth: 200 }, { prop: 'file_path', label: '安装包', form: false, formatter: v => v ? '已上传' : '未上传' }, { prop: 'created_at', label: '创建时间', form: false }],
+      { prop: 'changelog', label: '变更说明', type: 'textarea', minWidth: 200 }, { prop: 'file_path', label: '安装包', form: false, minWidth: 180, formatter: pkgName }, { prop: 'created_at', label: '创建时间', form: false }],
       filters: [{ prop: 'platform', label: '平台', options: opts(['linux', 'windows']) }, { prop: 'status', label: '状态', options: opts(['草稿', '灰度', '已发布', '已下线']) }],
       actions: [uploadAction('version')] };
   },
@@ -277,7 +299,7 @@ Pages.software = {
   setup() {
     return { cols: [{ prop: 'name', label: '软件名称', required: true }, { prop: 'version', label: '版本' }, { prop: 'category', label: '分类', type: 'select', allowCreate: true, options: opts(['办公', '浏览器', '安全', '开发', '驱动', '工具']) },
       { prop: 'platform', label: '平台', type: 'select', options: opts(['linux', 'windows', 'all']) }, { prop: 'description', label: '说明', type: 'textarea' },
-      { prop: 'size', label: '大小', form: false, formatter: fmtSize }, { prop: 'file_path', label: '安装包', form: false, formatter: v => v ? '已上传' : '未上传' }],
+      { prop: 'size', label: '大小', form: false, formatter: fmtSize }, { prop: 'file_path', label: '安装包', form: false, minWidth: 180, formatter: pkgName }],
       actions: [uploadAction('software')] };
   },
   template: `<crud-page api="/api/admin/software" title="装机软件" :columns="cols" :row-actions="actions" :defaults="{platform:'linux',category:'办公'}"/>`,
