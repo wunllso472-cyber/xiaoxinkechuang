@@ -106,12 +106,29 @@ def stream(path, body, on_event, stop_flag=None):
     on_event({"type": "end"})
 
 
-def download(path, dest):
+def download(path, dest, on_progress=None):
+    """下载到 dest；on_progress(已下载字节, 总字节) 的总字节未知时为 0。先写临时文件，完整下载后才改名"""
     req = urllib.request.Request(_url(path), headers=_headers())
-    with urllib.request.urlopen(req, timeout=600) as r, open(dest, "wb") as f:
-        while True:
-            b = r.read(1 << 20)
-            if not b:
-                break
-            f.write(b)
+    part = dest + ".part"
+    try:
+        with urllib.request.urlopen(req, timeout=600) as r, open(part, "wb") as f:
+            total, got = int(r.headers.get("Content-Length") or 0), 0
+            while True:
+                b = r.read(256 << 10)
+                if not b:
+                    break
+                f.write(b)
+                got += len(b)
+                if on_progress:
+                    on_progress(got, total)
+        if total and got < total:
+            raise ApiError("下载中断：仅收到 %d / %d 字节" % (got, total))
+        os.replace(part, dest)
+    except urllib.error.HTTPError as e:
+        raise ApiError("服务器返回 %s" % e.code)
+    except (urllib.error.URLError, OSError) as e:
+        raise ApiError("%s" % getattr(e, "reason", e))
+    finally:
+        if os.path.exists(part):
+            os.remove(part)
     return dest
