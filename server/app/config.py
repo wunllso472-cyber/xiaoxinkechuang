@@ -10,6 +10,8 @@ def _load():
         cfg = yaml.safe_load(f) or {}
     if os.environ.get("XX_DATABASE_URL"):
         cfg.setdefault("database", {})["url"] = os.environ["XX_DATABASE_URL"]
+    if os.environ.get("XX_DB_SCHEMA"):
+        cfg.setdefault("database", {})["schema"] = os.environ["XX_DB_SCHEMA"]
     if os.environ.get("XX_SECRET_KEY"):
         cfg.setdefault("server", {})["secret_key"] = os.environ["XX_SECRET_KEY"]
     if os.environ.get("XX_LLM_API_KEY"):

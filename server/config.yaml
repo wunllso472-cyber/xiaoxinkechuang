@@ -1,5 +1,5 @@
 # 小信助手服务端配置文件
-# 也可通过环境变量覆盖：XX_DATABASE_URL、XX_SECRET_KEY、XX_LLM_API_KEY
+# 也可通过环境变量覆盖：XX_DATABASE_URL、XX_DB_SCHEMA、XX_SECRET_KEY、XX_LLM_API_KEY
 
 server:
   host: 0.0.0.0
@@ -12,6 +12,9 @@ server:
 database:
   # PostgreSQL 连接串（psycopg2 驱动）
   url: "postgresql+psycopg2://xiaoxin:xiaoxin123@127.0.0.1:5432/xiaoxin"
+  # 业务表所在 schema，留空则用默认的 public。人大金仓（KingbaseES，同样用上面的 postgresql 连接串）必须填写，
+  # 如 xiaoxin：金仓系统视图 sys_user 与用户表同名，不加 schema 会查到系统视图
+  schema: ""
   pool_size: 10
   echo: false
 

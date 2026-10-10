@@ -1,7 +1,7 @@
 import datetime
 import json
 
-from sqlalchemy import create_engine, Column, Integer, String, Text, Float, Boolean, DateTime, JSON, Date
+from sqlalchemy import create_engine, event, Column, Integer, String, Text, Float, Boolean, DateTime, JSON, Date, MetaData
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from . import config
@@ -15,6 +15,35 @@ else:
 
 engine = create_engine(_url, **_kwargs)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+# 业务表所在 schema（仅 PostgreSQL/人大金仓）。金仓自带系统视图 sys_catalog.sys_user，
+# 与用户表同名且优先解析，部署到金仓时必须配置独立 schema（如 xiaoxin），表名都会带上 schema 前缀
+SCHEMA = (config.get("database.schema") or None) if engine.dialect.name == "postgresql" else None
+
+if engine.dialect.name == "postgresql":
+    def _server_version(conn):
+        # 人大金仓 version() 返回 "KingbaseES V008R006..."，SQLAlchemy 无法解析，统一改用 server_version_num
+        num = int(conn.exec_driver_sql("SHOW server_version_num").scalar())
+        return (num // 10000, num % 10000) if num >= 100000 else (num // 10000, num // 100 % 100, num % 100)
+
+    engine.dialect._get_server_version_info = _server_version
+
+    @event.listens_for(engine, "connect")
+    def _on_connect(dbapi_conn, _record):
+        # 金仓 Oracle 兼容模式默认把空串存成 NULL，会违反 NOT NULL 约束，按会话关闭（普通 PostgreSQL 无此参数，跳过）
+        cur = dbapi_conn.cursor()
+        cur.execute("SELECT 1 FROM pg_settings WHERE name = 'ora_input_emptystr_isnull'")
+        if cur.fetchone():
+            cur.execute("SET ora_input_emptystr_isnull = off")
+            # 金仓保留字比 PostgreSQL 多（如 Oracle 模式下的 level），补进引号规则，DDL/DML 中自动加双引号
+            cur.execute("SELECT word FROM pg_get_keywords() WHERE catcode IN ('R', 'T')")
+            preparer = engine.dialect.identifier_preparer
+            extra = {r[0] for r in cur.fetchall()} - preparer.reserved_words
+            if extra:
+                preparer.reserved_words = preparer.reserved_words | extra
+                preparer._strings.clear()
+        cur.close()
+        dbapi_conn.commit()
 
 
 class _Base:
@@ -30,7 +59,7 @@ class _Base:
         return d
 
 
-Base = declarative_base(cls=_Base)
+Base = declarative_base(cls=_Base, metadata=MetaData(schema=SCHEMA))
 now = datetime.datetime.now
 
 
@@ -598,6 +627,9 @@ class ToolCallLog(Base):
 
 
 def init_db():
+    if SCHEMA:
+        with engine.begin() as conn:
+            conn.exec_driver_sql('CREATE SCHEMA IF NOT EXISTS "%s"' % SCHEMA)
     Base.metadata.create_all(engine)
 
 

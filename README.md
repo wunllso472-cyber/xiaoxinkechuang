@@ -4,14 +4,14 @@
 
 ```
 xiaoxinkechuang/
-├── server/                     服务端（FastAPI + PostgreSQL，部署于 CentOS ARM）
+├── server/                     服务端（FastAPI + PostgreSQL / 人大金仓，部署于 CentOS，ARM 与 x86 通用）
 │   ├── app/
 │   │   ├── api/                接口：客户端、终端、消息、运维、问答/模型、知识库、合同、工具插件
 │   │   ├── llm/                大模型统一调用接口：适配器 + 路由/降级
 │   │   ├── services/           文档解析、RAG、合同审查、终端监测、工具调度、微调评估
 │   │   └── static/             管理端(admin)、运维移动端(h5)、前端依赖(vendor，离线可用)
 │   ├── config.yaml             配置（数据库、大模型参数、向量、OCR、微调）
-│   ├── deploy/                 CentOS ARM 一键部署、systemd、离线依赖下载、部署验证脚本
+│   ├── deploy/                 CentOS 一键部署、systemd、无 root 启停脚本(ctl.sh)、离线依赖下载、部署验证脚本
 │   ├── Dockerfile / docker-compose.yml
 │   └── tests/smoke_test.py     接口冒烟测试
 ├── client/                     桌面客户端（Python + Tkinter，Ubuntu/麒麟/统信/Windows）
@@ -30,6 +30,7 @@ cd server
 pip install -r requirements.txt
 python -m uvicorn app.main:app --port 8000
 # 临时无 PostgreSQL 时可用 SQLite 体验：XX_DATABASE_URL=sqlite:///./data/dev.db
+# 人大金仓（KingbaseES）：连接串同样用 postgresql+psycopg2://，并且必须配置 database.schema（或 XX_DB_SCHEMA），见部署手册 2.8
 
 # 客户端
 cd client
@@ -56,7 +57,7 @@ python server/tests/smoke_test.py http://127.0.0.1:8000
 - [数据库设计说明书](docs/数据库设计说明书.md)
 - [用户操作手册](docs/用户操作手册.md)
 - [技术架构说明](docs/技术架构说明.md)
-- [系统安装部署手册](docs/部署手册.md) —— CentOS + PostgreSQL 一键 / 离线 / 手动部署，数据库初始化（`python -m app.init_data` 或 `server/deploy/sql/` 脚本）及初始化数据清单，各模块验证（`server/deploy/verify_deploy.sh`）
+- [系统安装部署手册](docs/部署手册.md) —— CentOS + PostgreSQL / 人大金仓，一键 / 离线 / 手动 / 无 root 权限部署（已在 CentOS 7 + KingbaseES V8R6 上验证），数据库初始化（`python -m app.init_data` 或 `server/deploy/sql/` 脚本）及初始化数据清单，各模块验证（`server/deploy/verify_deploy.sh`）
 - [大模型配置说明](docs/大模型配置说明.md)
 - [信创适配说明](docs/信创适配说明.md)
 - [插件 SDK](sdk/README.md)

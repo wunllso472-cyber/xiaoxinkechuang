@@ -32,12 +32,13 @@ def _run_init(demo):
 def _check():
     from sqlalchemy import inspect, text
     from . import config
-    from .db import Base, engine
-    print("==> 数据库：%s" % config.get("database.url").split("@")[-1])
+    from .db import SCHEMA, Base, engine
+    print("==> 数据库：%s%s" % (config.get("database.url").split("@")[-1], "，schema：" + SCHEMA if SCHEMA else ""))
+    prefix = '"%s".' % SCHEMA if SCHEMA else ""
     with engine.connect() as conn:
         if engine.dialect.name == "postgresql":
-            print("    版本：%s" % conn.execute(text("SHOW server_version")).scalar())
-        existing = set(inspect(conn).get_table_names())
+            print("    版本：%s" % conn.execute(text("SELECT version()")).scalar())
+        existing = set(inspect(conn).get_table_names(schema=SCHEMA))
         expected = [t.name for t in Base.metadata.sorted_tables]
         missing = [t for t in expected if t not in existing]
         print("    表数量：%d / %d%s" % (len(expected) - len(missing), len(expected),
@@ -45,9 +46,9 @@ def _check():
         print("\n    %-22s %s" % ("表名", "记录数"))
         for t in expected:
             if t in existing:
-                print("    %-24s %d" % (t, conn.execute(text('SELECT count(*) FROM "%s"' % t)).scalar()))
+                print("    %-24s %d" % (t, conn.execute(text('SELECT count(*) FROM %s"%s"' % (prefix, t))).scalar()))
         if "sys_user" in existing:
-            users = conn.execute(text("SELECT username, role, enabled FROM sys_user ORDER BY id")).fetchall()
+            users = conn.execute(text("SELECT username, role, enabled FROM %ssys_user ORDER BY id" % prefix)).fetchall()
             print("\n    用户：" + "，".join("%s(%s%s)" % (u, r, "" if e else "，已禁用") for u, r, e in users))
     return 0 if not missing else 1
 

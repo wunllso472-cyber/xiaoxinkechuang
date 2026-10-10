@@ -4,6 +4,9 @@
 #   DB_PASS='强密码' bash deploy/install_centos_arm.sh                   在线安装，本机 PostgreSQL
 #   OFFLINE=1 DB_PASS='强密码' bash deploy/install_centos_arm.sh         使用 deploy/wheels 离线依赖包
 #   DB_HOST=10.0.0.5 DB_PASS='强密码' bash deploy/install_centos_arm.sh  使用已建好库的独立数据库服务器
+#   DB_EXTERNAL=1 DB_PORT=54321 DB_USER=system DB_PASS='密码' DB_NAME=库名 DB_SCHEMA=xiaoxin bash deploy/install_centos_arm.sh
+#                                                                        使用已有的人大金仓（见部署手册 2.8）
+# 没有 root 权限时不能使用本脚本，按部署手册 3.5 在普通用户目录下部署
 # 可重复执行：已有的数据库、用户、config.yaml 和业务数据都会保留
 set -e
 
@@ -14,6 +17,8 @@ DB_PORT=${DB_PORT:-5432}
 DB_NAME=${DB_NAME:-xiaoxin}
 DB_USER=${DB_USER:-xiaoxin}
 DB_PASS=${DB_PASS:-xiaoxin123}
+DB_SCHEMA=${DB_SCHEMA:-}            # 业务表所在 schema，人大金仓必须指定（如 xiaoxin）；为空时不修改配置中的现有值
+DB_EXTERNAL=${DB_EXTERNAL:-}        # 1 = 数据库已就绪（如本机的人大金仓），不在本机安装 PostgreSQL
 PORT=${PORT:-8000}
 PG_VERSION=${PG_VERSION:-}          # 指定后从 PostgreSQL 官方源安装该版本，如 13 / 15 / 16
 SEED_DEMO=${SEED_DEMO:-0}           # 1 = 写入演示数据（仅测试环境）
@@ -50,7 +55,7 @@ echo "==> 使用 Python：$PY ($($PY --version 2>&1))"
 
 # ---------- 2. PostgreSQL（仅本机数据库）----------
 PG_SVC=postgresql
-if [ "$DB_HOST" = "127.0.0.1" ] || [ "$DB_HOST" = "localhost" ]; then
+if [ "$DB_EXTERNAL" != "1" ] && { [ "$DB_HOST" = "127.0.0.1" ] || [ "$DB_HOST" = "localhost" ]; }; then
   # 识别已安装的 PostgreSQL：官方源版本（/usr/pgsql-N）优先，其次系统自带
   detect_pg() {
     local d
@@ -105,7 +110,7 @@ if [ "$DB_HOST" = "127.0.0.1" ] || [ "$DB_HOST" = "localhost" ]; then
   (cd /tmp && runuser -u postgres -- $PG_BIN/psql -q -v ON_ERROR_STOP=1 -v db_user="$DB_USER" -v db_pass="$DB_PASS" \
      -v db_name="$DB_NAME" -f - ) < "$SRC_DIR"/deploy/sql/00_create_db.sql
 else
-  echo "==> 使用独立数据库服务器 $DB_HOST:$DB_PORT（需已按部署手册 2.3 创建用户和数据库）"
+  echo "==> 使用已有数据库 $DB_HOST:$DB_PORT（需已按部署手册 2.3 创建用户和数据库；人大金仓见 2.8）"
 fi
 
 # ---------- 3. 应用 ----------
@@ -123,11 +128,12 @@ if [ "$OFFLINE" = "1" ]; then
   $APP_DIR/venv/bin/pip install --no-index --find-links "$SRC_DIR"/deploy/wheels -r $APP_DIR/requirements.txt
 else
   $APP_DIR/venv/bin/pip install -U pip -i $PIP_INDEX
-  $APP_DIR/venv/bin/pip install -r $APP_DIR/requirements.txt -i $PIP_INDEX
+  # --prefer-binary：CentOS 7（glibc 2.17）上新版 numpy 等没有可用的预编译包，改选有 wheel 的旧版本而不是源码编译
+  $APP_DIR/venv/bin/pip install --prefer-binary -r $APP_DIR/requirements.txt -i $PIP_INDEX
 fi
 
-# 写入数据库连接串（密码自动做 URL 编码）、演示数据开关；secret_key 仍为默认值时替换为随机值
-DB_USER="$DB_USER" DB_PASS="$DB_PASS" DB_HOST="$DB_HOST" DB_PORT="$DB_PORT" DB_NAME="$DB_NAME" SEED_DEMO="$SEED_DEMO" \
+# 写入数据库连接串（密码自动做 URL 编码）、schema、演示数据开关；secret_key 仍为默认值时替换为随机值
+DB_USER="$DB_USER" DB_PASS="$DB_PASS" DB_HOST="$DB_HOST" DB_PORT="$DB_PORT" DB_NAME="$DB_NAME" DB_SCHEMA="$DB_SCHEMA" SEED_DEMO="$SEED_DEMO" \
 $APP_DIR/venv/bin/python - $APP_DIR/config.yaml <<'PYEOF'
 import os, re, secrets, sys
 from urllib.parse import quote
@@ -137,6 +143,12 @@ e = os.environ
 url = "postgresql+psycopg2://%s:%s@%s:%s/%s" % (quote(e["DB_USER"], safe=""), quote(e["DB_PASS"], safe=""),
                                                 e["DB_HOST"], e["DB_PORT"], e["DB_NAME"])
 s = re.sub(r'(?m)^(\s*url:\s*)"[^"\n]*"', lambda m: m.group(1) + '"%s"' % url, s, count=1)
+if e["DB_SCHEMA"]:
+    if re.search(r'(?m)^\s*schema:', s):
+        s = re.sub(r'(?m)^(\s*schema:\s*).*$', lambda m: m.group(1) + '"%s"' % e["DB_SCHEMA"], s, count=1)
+    else:  # 旧版本的 config.yaml 没有 schema 项，补在 url 之后
+        s = re.sub(r'(?m)^(\s*)(url:.*)$',
+                   lambda m: '%s%s\n%sschema: "%s"' % (m.group(1), m.group(2), m.group(1), e["DB_SCHEMA"]), s, count=1)
 s = re.sub(r'(?m)^(\s*seed_demo:\s*)\S+', lambda m: m.group(1) + ("true" if e["SEED_DEMO"] == "1" else "false"), s, count=1)
 s = re.sub(r'(?m)^(\s*secret_key:\s*)"please-change-me-xiaoxin-2025"',
            lambda m: m.group(1) + '"%s"' % secrets.token_hex(24), s, count=1)

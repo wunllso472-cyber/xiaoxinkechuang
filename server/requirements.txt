@@ -1,4 +1,7 @@
 # 小信助手服务端依赖（Python 3.8+；均提供 aarch64/ARM64 预编译 wheel，可在鲲鹏/飞腾 CentOS 上直接安装）
+# CentOS 7（glibc 2.17）配 Python 3.10+ 时，新版 numpy 等只有源码包，安装时加 --prefer-binary（pip）或
+# --only-binary :all:（uv），自动选用有预编译包的版本（已验证：Python 3.11 下为 numpy 2.2.6）
+# psycopg2 同时用于连接 PostgreSQL 和人大金仓（KingbaseES）
 fastapi>=0.100,<1.0
 uvicorn[standard]>=0.22
 SQLAlchemy>=2.0,<2.2
