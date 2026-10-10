@@ -82,6 +82,11 @@ check("信息补充", c.put("/api/mobile/tickets/%d/info" % t["id"], json={"addr
 check("反馈", c.post("/api/mobile/tickets/%d/feedback" % t["id"], json={"solution": "重装驱动"}, headers=OH))
 check("评价", c.post("/api/ops/tickets/%d/rate" % t["id"], json={"rating": 5}, headers=H))
 check("上报案例", c.post("/api/ops/tickets/%d/to-case" % t["id"], json={}, headers=OH))
+mt = check("移动新增工单", c.post("/api/mobile/tickets", json={"title": "现场报修", "category": "网络", "reporter": "李四"}, headers=OH))
+assert mt["status"] == "处理中" and mt["source"] == "移动登记" and mt["assignee_name"], mt
+check("移动新增工单反馈", c.post("/api/mobile/tickets/%d/feedback" % mt["id"], json={"solution": "重插网线"}, headers=OH))
+mp = check("移动新增工单（转工单池）", c.post("/api/mobile/tickets", json={"title": "现场报修2", "self_handle": False}, headers=OH))
+assert mp["status"] == "待指派" and not mp["assignee_id"], mp
 check("移动补录", c.post("/api/mobile/tickets/supplement", json={"title": "补录单", "solution": "已处理"}, headers=OH))
 check("工单详情", c.get("/api/ops/tickets/%d" % t["id"], headers=H))
 check("工作台", c.get("/api/ops/workbench", headers=H))

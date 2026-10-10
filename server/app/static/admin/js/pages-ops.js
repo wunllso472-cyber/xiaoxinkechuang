@@ -121,7 +121,7 @@ Pages.tickets = {
   template: `<div class="card"><div class="toolbar"><el-input v-model="q.keyword" placeholder="工单号/标题/报修人/电话" clearable/>
     <el-select v-model="q.status" placeholder="状态" clearable><el-option v-for="s in T_STATUS" :key="s" :value="s" :label="s"/></el-select>
     <el-select v-model="q.category" placeholder="分类" clearable><el-option v-for="s in T_CAT" :key="s" :value="s" :label="s"/></el-select>
-    <el-select v-model="q.source" placeholder="来源" clearable><el-option v-for="s in ['来电','补录','移动补录','智能问答']" :key="s" :value="s" :label="s"/></el-select>
+    <el-select v-model="q.source" placeholder="来源" clearable><el-option v-for="s in ['来电','补录','移动登记','移动补录','智能问答']" :key="s" :value="s" :label="s"/></el-select>
     <el-date-picker v-model="range" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始" end-placeholder="结束" style="width:240px"/>
     <el-button type="primary" @click="q.page=1;load()">搜索</el-button></div>
     <el-table :data="rows" border size="small"><el-table-column prop="ticket_no" label="工单号" width="170"/><el-table-column prop="title" label="标题" min-width="150"/>

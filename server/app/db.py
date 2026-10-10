@@ -301,7 +301,7 @@ class Ticket(Base):
     dept = C(String(128), default="")
     address = C(String(256), default="")
     device_info = C(String(256), default="")
-    source = C(String(16), default="来电")  # 来电/补录/移动补录/智能问答
+    source = C(String(16), default="来电")  # 来电/补录/移动登记/移动补录/智能问答
     # 待指派 / 待签收 / 处理中 / 挂起审核中 / 已挂起 / 待评价 / 已办结
     status = C(String(16), default="待指派", index=True)
     station = C(String(64), default="市保障中心")

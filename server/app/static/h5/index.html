@@ -40,6 +40,7 @@ async function api(url, method, body) {
   if (!r.ok) { showFailToast(d.detail || '操作失败'); throw new Error(d.detail); }
   return d;
 }
+const T_CAT = ['终端故障', '打印外设', '网络', '操作系统', '办公软件', '账号权限', '智能报修', '其他'];
 const STYPE = { 待签收: 'warning', 处理中: 'primary', 挂起审核中: 'danger', 待评价: 'success', 已办结: 'success' };
 
 const App = {
@@ -47,9 +48,12 @@ const App = {
     const view = ref('list'); const tab = ref('todo'); const list = ref([]); const stats = ref({}); const kw = ref('');
     const cur = ref(null); const colleagues = ref([]);
     const lf = reactive({ username: '', password: '' });
-    const pop = reactive({ transfer: false, suspend: false, info: false, feedback: false });
+    const pop = reactive({ transfer: false, suspend: false, info: false, feedback: false, cat: false });
     const form = reactive({ assignee: null, reason: '', days: 1, solution: '', feedback: '', info: {} });
     const sup = reactive({ title: '', description: '', category: '终端故障', reporter: '', reporter_phone: '', address: '', device_info: '', solution: '', feedback: '' });
+
+    const newTicket = () => ({ title: '', description: '', category: '终端故障', reporter: '', reporter_phone: '', dept: '', address: '', device_info: '', self_handle: true });
+    const nt = reactive(newTicket());
 
     const login = async () => {
       const r = await api('/api/login', 'POST', lf);
@@ -89,8 +93,14 @@ const App = {
       const t = await api('/api/mobile/tickets/supplement', 'POST', sup);
       showSuccessToast('补录成功 ' + t.ticket_no); Object.keys(sup).forEach(k => sup[k] = k === 'category' ? '终端故障' : ''); view.value = 'list'; tab.value = 'done'; load();
     };
+    const doCreate = async () => {
+      if (!nt.title.trim()) return showToast('请填写问题标题');
+      const t = await api('/api/mobile/tickets', 'POST', nt);
+      showSuccessToast(nt.self_handle ? '已新增 ' + t.ticket_no : '已提交，待客服指派');
+      Object.assign(nt, newTicket()); view.value = 'list'; tab.value = 'todo'; load();
+    };
     onMounted(() => { if (S.token) load().catch(() => {}); });
-    return { S, view, tab, list, stats, kw, cur, lf, login, logout, load, open, sign, openTransfer, doTransfer, doSuspend, openInfo, doInfo, doFeedback, doSupplement, pop, form, colleagues, sup, STYPE };
+    return { S, view, tab, list, stats, kw, cur, lf, login, logout, load, open, sign, openTransfer, doTransfer, doSuspend, openInfo, doInfo, doFeedback, doSupplement, doCreate, pop, form, colleagues, sup, nt, STYPE, T_CAT };
   },
   template: `
   <div v-if="!S.token" class="login"><h1>小信运维</h1><p>运维人员移动工单处置</p>
@@ -109,7 +119,7 @@ const App = {
         <div class="s">{{t.ticket_no}} · {{t.category}} · {{t.reporter}} {{t.address}}</div>
         <div class="s">期限 {{t.deadline}}</div></div>
     </van-pull-refresh>
-    <van-tabbar :model-value="0"><van-tabbar-item icon="orders-o">工单</van-tabbar-item><van-tabbar-item icon="add-o" @click="view='supplement'">工单补录</van-tabbar-item></van-tabbar>
+    <van-tabbar :model-value="0"><van-tabbar-item icon="orders-o">工单</van-tabbar-item><van-tabbar-item icon="add-o" @click="view='create'">新增工单</van-tabbar-item><van-tabbar-item icon="records-o" @click="view='supplement'">工单补录</van-tabbar-item></van-tabbar>
   </div>
 
   <div v-else-if="view==='detail' && cur" class="page" style="padding-bottom:80px">
@@ -158,6 +168,19 @@ const App = {
       <van-field v-model="form.solution" type="textarea" rows="3" label="处理结果" placeholder="故障原因及解决方法"/>
       <van-field v-model="form.feedback" type="textarea" rows="2" label="备注"/>
       <div style="margin:12px 16px"><van-button block type="primary" @click="doFeedback">提交反馈</van-button></div></van-popup>
+  </div>
+
+  <div v-else-if="view==='create'" class="page">
+    <van-nav-bar title="新增工单" left-arrow @click-left="view='list'"/>
+    <van-cell-group inset title="现场发现或用户当面报修的问题">
+      <van-field v-model="nt.title" label="问题" required placeholder="问题标题"/><van-field v-model="nt.description" type="textarea" rows="3" label="描述" placeholder="故障现象"/>
+      <van-field v-model="nt.category" label="分类" readonly is-link @click="pop.cat=true"/>
+      <van-field v-model="nt.reporter" label="报修人"/><van-field v-model="nt.reporter_phone" type="tel" label="电话"/>
+      <van-field v-model="nt.dept" label="部门"/><van-field v-model="nt.address" label="地点"/><van-field v-model="nt.device_info" label="设备"/>
+      <van-cell title="由我处理" :label="nt.self_handle ? '提交后进入我的待办（处理中）' : '提交到工单池，由客服指派'"><template #right-icon><van-switch v-model="nt.self_handle" size="22"/></template></van-cell>
+    </van-cell-group>
+    <div style="margin:16px"><van-button block type="primary" @click="doCreate">提交工单</van-button></div>
+    <van-action-sheet v-model:show="pop.cat" :actions="T_CAT.map(c => ({ name: c }))" cancel-text="取消" close-on-click-action @select="a => nt.category = a.name"/>
   </div>
 
   <div v-else-if="view==='supplement'" class="page">

@@ -301,6 +301,22 @@ def feedback(tid: int, data: dict, db=Depends(get_db), user=Depends(current_user
     return t.to_dict()
 
 
+@m.post("/tickets")
+def mobile_create(data: dict, db=Depends(get_db), user=Depends(current_user)):
+    """运维人员现场新增工单：self_handle 为真（默认）时由本人处理，直接进入处理中；否则进入工单池待客服指派"""
+    if not str(data.get("title") or "").strip():
+        raise HTTPException(400, "请填写问题标题")
+    self_handle = data.get("self_handle", True)
+    data = {k: v for k, v in data.items() if k not in ("status", "assignee_id")}
+    t = create_ticket(db, data, user, source="移动登记")
+    t.station = user.station or t.station
+    if self_handle:
+        t.assignee_id, t.assignee_name, t.status = user.id, _name(user), "处理中"
+        _log(db, t, "签收", user, "移动端登记，本人处理")
+    db.commit()
+    return t.to_dict()
+
+
 @m.post("/tickets/supplement")
 def supplement(data: dict, db=Depends(get_db), user=Depends(current_user)):
     """运维人员补录已解决但未登记的工单"""
