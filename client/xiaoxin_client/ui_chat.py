@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
 from . import api
-from .ui_common import bg, ui, tree_with_scroll, FONT, BRAND
+from .ui_common import bg, ui, tree_with_scroll, scale, FONT, BRAND, BG, SEP, TEXT, TEXT2
 
 
 class ChatFrame(ttk.Frame):
@@ -14,7 +14,7 @@ class ChatFrame(ttk.Frame):
         super().__init__(parent, padding=10)
         bar = ttk.Frame(self)
         bar.pack(fill="x")
-        ttk.Label(bar, text="模型：").pack(side="left")
+        ttk.Label(bar, text="模型", style="Muted.TLabel").pack(side="left", padx=(0, 6))
         self.model_var = tk.StringVar(value="自动路由")
         self.model_cb = ttk.Combobox(bar, textvariable=self.model_var, state="readonly", width=22)
         self.model_cb.pack(side="left")
@@ -23,18 +23,30 @@ class ChatFrame(ttk.Frame):
         ttk.Radiobutton(bar, text="本地知识问答", value="kb", variable=self.mode).pack(side="left")
         ttk.Button(bar, text="上传私有文档", command=self.upload_doc).pack(side="left", padx=8)
         ttk.Button(bar, text="新会话", command=self.new_session).pack(side="right")
-        self.text = tk.Text(self, wrap="word", bg="white", relief="flat", padx=10, pady=10, state="disabled", height=20)
-        self.text.pack(fill="both", expand=True, pady=8)
-        self.text.tag_config("user", foreground="white", background=BRAND, lmargin1=200, lmargin2=200, rmargin=10, spacing1=6, spacing3=6)
-        self.text.tag_config("bot", foreground="#1f2d3d", background="#f1f4f9", lmargin1=10, lmargin2=10, rmargin=120, spacing1=6, spacing3=6)
-        self.text.tag_config("meta", foreground="#8492a6", font=(FONT[0], 9))
+        k = scale(self)
+        box = tk.Frame(self, bg=SEP, padx=1, pady=1)
+        box.pack(fill="both", expand=True, pady=12)
+        self.text = tk.Text(box, wrap="word", bg=BG, fg=TEXT, relief="flat", bd=0, highlightthickness=0, padx=int(14 * k), pady=int(12 * k),
+                            state="disabled", height=20, cursor="arrow")
+        self.text.pack(fill="both", expand=True)
+        # 气泡：用户为系统蓝靠右，助手为浅灰靠左
+        self.text.tag_config("user", justify="right", spacing1=int(4 * k), spacing3=int(4 * k))
+        self.wrap = int(460 * k)
+        self.text.tag_config("bot", foreground=TEXT, background="#e9e9eb", lmargin1=int(12 * k), lmargin2=int(12 * k), rmargin=int(160 * k),
+                             spacing1=int(7 * k), spacing3=int(7 * k), rmargincolor=BG)
+        self.text.tag_config("meta", foreground=TEXT2, font=(FONT[0], 9), lmargin1=int(4 * k))
         bottom = ttk.Frame(self)
         bottom.pack(fill="x")
-        self.input = tk.Text(bottom, height=3, wrap="word", relief="solid", bd=1)
-        self.input.pack(side="left", fill="x", expand=True)
+        ibox = tk.Frame(bottom, bg="#c7c7cc", padx=1, pady=1)
+        ibox.pack(side="left", fill="x", expand=True)
+        self.input = tk.Text(ibox, height=3, wrap="word", relief="flat", bd=0, highlightthickness=0, bg=BG, fg=TEXT, insertbackground=TEXT,
+                             padx=int(10 * k), pady=int(8 * k))
+        self.input.pack(fill="x", expand=True)
+        self.input.bind("<FocusIn>", lambda e: ibox.config(bg=BRAND))
+        self.input.bind("<FocusOut>", lambda e: ibox.config(bg="#c7c7cc"))
         self.input.bind("<Return>", self._enter)
         self.send_btn = ttk.Button(bottom, text="发送", style="Accent.TButton", command=self.send)
-        self.send_btn.pack(side="left", padx=6, fill="y")
+        self.send_btn.pack(side="left", padx=8, fill="y")
         self.stop_btn = ttk.Button(bottom, text="暂停", command=self.stop, state="disabled")
         self.stop_btn.pack(side="left", fill="y")
         self.models = []
@@ -54,7 +66,14 @@ class ChatFrame(ttk.Frame):
 
     def _append(self, tag, text):
         self.text.config(state="normal")
-        self.text.insert("end", text + "\n", tag)
+        if tag == "user":  # 用户气泡贴合文字宽度，靠右
+            k, start = scale(self), self.text.index("end-1c")
+            self.text.window_create("end", window=tk.Label(self.text, text=text, bg=BRAND, fg="white", justify="left", wraplength=self.wrap,
+                                                           padx=int(12 * k), pady=int(7 * k)))
+            self.text.insert("end", "\n")
+            self.text.tag_add(tag, start, "end-1c")
+        else:
+            self.text.insert("end", text + "\n", tag)
         self.text.insert("end", "\n")
         self.text.config(state="disabled")
         self.text.see("end")
@@ -153,14 +172,14 @@ class ContractFrame(ttk.Frame):
         self.status = ttk.Label(bar, text="", style="Muted.TLabel")
         self.status.pack(side="left", padx=8)
         pw = ttk.PanedWindow(self, orient="horizontal")
-        pw.pack(fill="both", expand=True, pady=8)
+        pw.pack(fill="both", expand=True, pady=12)
         lf, self.list = tree_with_scroll(pw, ("name", "risk", "status"), ("合同", "风险", "状态"), [200, 50, 70])
         self.list.bind("<<TreeviewSelect>>", self.show)
         pw.add(lf, weight=1)
         right = ttk.Notebook(pw)
         pw.add(right, weight=3)
         f1, self.review = tree_with_scroll(right, ("rule", "level", "result", "msg"), ("审查规则", "级别", "结果", "预警提醒"), [180, 50, 70, 360])
-        self.review.tag_configure("bad", background="#fde2e2")
+        self.review.tag_configure("bad", background="#ffebe9")
         right.add(f1, text="合规性研判")
         f2, self.elements = tree_with_scroll(right, ("k", "v"), ("要素", "提取结果"), [160, 500])
         right.add(f2, text="要素提取")

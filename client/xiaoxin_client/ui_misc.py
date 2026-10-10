@@ -8,7 +8,7 @@ from tkinter import ttk, messagebox
 from . import api, sysinfo, config
 from .cleaner import fmt_size
 from .config import cfg, IS_WIN, VERSION
-from .ui_common import bg, tree_with_scroll, FONT_B
+from .ui_common import bg, tree_with_scroll, scale, FONT_B, BG, SEP, TEXT, GREEN, RED
 
 
 class DeviceFrame(ttk.Frame):
@@ -23,7 +23,7 @@ class DeviceFrame(ttk.Frame):
         self.badge = ttk.Label(bar, text="", font=FONT_B)
         self.badge.pack(side="left", padx=12)
         nb = ttk.Notebook(self)
-        nb.pack(fill="both", expand=True, pady=8)
+        nb.pack(fill="both", expand=True, pady=12)
         f1, self.hw = tree_with_scroll(nb, ("k", "v"), ("配件", "参数"), [160, 560], height=14)
         nb.add(f1, text="配件信息")
         f2, self.changes = tree_with_scroll(nb, ("c", "o", "n", "t"), ("配件", "原配件", "新配件", "发现时间"), [120, 220, 220, 150])
@@ -47,7 +47,7 @@ class DeviceFrame(ttk.Frame):
     def _status(self, s):
         t = s["terminal"]
         self.badge.config(text=("✔ 信创终端" if t["is_xinchuang"] else "非信创终端") + ("　⚠ 违规双系统" if t["dual_system"] else ""),
-                          foreground="#29a37a" if t["is_xinchuang"] and not t["dual_system"] else "#d9534f")
+                          foreground=GREEN if t["is_xinchuang"] and not t["dual_system"] else RED)
         self.changes.delete(*self.changes.get_children())
         for c in s["changes"]:
             self.changes.insert("", "end", values=(c["component"], c["old_value"], c["new_value"], c["created_at"]))
@@ -61,9 +61,11 @@ class MessageFrame(ttk.Frame):
         super().__init__(parent, padding=10)
         ttk.Button(self, text="刷新", command=self.load).pack(anchor="w")
         f, self.tv = tree_with_scroll(self, ("t", "time", "r"), ("消息", "发送时间", "状态"), [400, 150, 60])
-        f.pack(fill="both", expand=True, pady=8)
+        f.pack(fill="both", expand=True, pady=12)
         self.tv.bind("<<TreeviewSelect>>", self.show)
-        self.body = tk.Text(self, height=8, wrap="word", bg="white", relief="flat", padx=8, pady=8)
+        box = tk.Frame(self, bg=SEP, padx=1, pady=1)
+        box.pack(fill="x")
+        self.body = tk.Text(box, height=8, wrap="word", bg=BG, fg=TEXT, relief="flat", bd=0, highlightthickness=0, padx=14, pady=12)
         self.body.pack(fill="x")
         self.msgs = {}
         self.load()
@@ -100,7 +102,7 @@ class SoftwareFrame(ttk.Frame):
         ttk.Button(bar, text="刷新", command=self.load).pack(side="left")
         ttk.Button(bar, text="下载并安装", style="Accent.TButton", command=self.install).pack(side="left", padx=8)
         f, self.tv = tree_with_scroll(self, ("n", "v", "c", "s", "d"), ("软件", "版本", "分类", "大小", "说明"), [160, 80, 80, 80, 360])
-        f.pack(fill="both", expand=True, pady=8)
+        f.pack(fill="both", expand=True, pady=12)
         self.items = {}
         self.load()
 
@@ -135,20 +137,21 @@ class SoftwareFrame(ttk.Frame):
 
 class SettingsFrame(ttk.Frame):
     def __init__(self, parent):
-        super().__init__(parent, padding=16)
+        super().__init__(parent, padding=10)
+        k = scale(self)
         self.vars = {}
         rows = [("server", "服务器地址"), ("client_key", "客户端接入密钥"), ("user_name", "使用人"), ("dept", "部门"),
                 ("cloud_server", "云桌面服务端名称")]
-        for i, (k, label) in enumerate(rows):
-            ttk.Label(self, text=label).grid(row=i, column=0, sticky="e", pady=6, padx=6)
-            v = tk.StringVar(value=cfg.get(k, ""))
-            ttk.Entry(self, textvariable=v, width=48).grid(row=i, column=1, sticky="w")
-            self.vars[k] = v
+        for i, (key, label) in enumerate(rows):
+            ttk.Label(self, text=label, style="Muted.TLabel").grid(row=i, column=0, sticky="w", pady=int(7 * k), padx=(0, int(16 * k)))
+            v = tk.StringVar(value=cfg.get(key, ""))
+            ttk.Entry(self, textvariable=v, width=48).grid(row=i, column=1, sticky="w", pady=int(5 * k))
+            self.vars[key] = v
         self.cloud = tk.BooleanVar(value=cfg.get("is_cloud_desktop", False))
-        ttk.Checkbutton(self, text="本机为云桌面用户端", variable=self.cloud).grid(row=len(rows), column=1, sticky="w", pady=6)
+        ttk.Checkbutton(self, text="本机为云桌面用户端", variable=self.cloud).grid(row=len(rows), column=1, sticky="w", pady=(int(10 * k), 0))
         self.floating = tk.BooleanVar(value=cfg.get("floating", True))
         ttk.Checkbutton(self, text="显示桌面悬浮助手", variable=self.floating).grid(row=len(rows) + 1, column=1, sticky="w")
-        ttk.Button(self, text="保存", style="Accent.TButton", command=self.save).grid(row=len(rows) + 2, column=1, sticky="w", pady=12)
+        ttk.Button(self, text="保存", style="Accent.TButton", command=self.save).grid(row=len(rows) + 2, column=1, sticky="w", pady=int(18 * k))
         ttk.Label(self, text="设备ID：%s\n客户端版本：%s\n配置文件：%s" % (cfg["device_id"], VERSION, config.CONFIG_FILE),
                   style="Muted.TLabel").grid(row=len(rows) + 3, column=0, columnspan=2, sticky="w")
 

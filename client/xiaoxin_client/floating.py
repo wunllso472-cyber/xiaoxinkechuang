@@ -23,15 +23,15 @@ class FloatingBall(tk.Toplevel):
                 self.attributes("-type", "dock")  # 部分 Linux 窗口管理器下不出现在任务栏
             except tk.TclError:
                 pass
-            key = "#f3f5f9"
+            key = "#ffffff"
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
         self.geometry("%dx%d+%d+%d" % (SIZE, SIZE, sw - SIZE - 30, sh // 2))
         c = tk.Canvas(self, width=SIZE, height=SIZE, bg=key, highlightthickness=0)
         c.pack()
-        c.create_oval(2, 2, SIZE - 2, SIZE - 2, fill=BRAND, outline="#29c5a6", width=3)
+        c.create_oval(3, 3, SIZE - 3, SIZE - 3, fill=BRAND, outline="#ffffff", width=3)
         c.create_text(SIZE // 2, SIZE * 0.42, text="小信", fill="white", font=("Microsoft YaHei UI" if IS_WIN else "Noto Sans CJK SC", -SIZE // 4, "bold"))
-        c.create_text(SIZE // 2, SIZE * 0.7, text="助手", fill="#cfe0ff", font=("Microsoft YaHei UI" if IS_WIN else "Noto Sans CJK SC", -SIZE // 6))
-        self.dot = c.create_oval(SIZE * 0.72, SIZE * 0.06, SIZE * 0.9, SIZE * 0.24, fill="#f56c6c", outline="white", state="hidden")
+        c.create_text(SIZE // 2, SIZE * 0.7, text="助手", fill="#d6e9ff", font=("Microsoft YaHei UI" if IS_WIN else "Noto Sans CJK SC", -SIZE // 6))
+        self.dot = c.create_oval(SIZE * 0.72, SIZE * 0.06, SIZE * 0.9, SIZE * 0.24, fill="#ff3b30", outline="white", state="hidden")
         self.c = c
         self.on_click = on_click
         self.menu = tk.Menu(self, tearoff=0)

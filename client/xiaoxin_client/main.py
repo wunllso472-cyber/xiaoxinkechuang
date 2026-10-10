@@ -12,7 +12,7 @@ if __package__ in (None, ""):  # 支持 python main.py 与 PyInstaller 直接运
 from xiaoxin_client.config import cfg, APP_NAME, VERSION, DATA_DIR  # noqa: E402
 from xiaoxin_client.agent import Agent  # noqa: E402
 from xiaoxin_client.floating import FloatingBall  # noqa: E402
-from xiaoxin_client.ui_common import setup_style, pump, ui, DARK, FONT, FONT_B  # noqa: E402
+from xiaoxin_client.ui_common import setup_style, pump, ui, BG, SIDEBAR, SEP, TEXT, TEXT2, FONT, FONT_B, FONT_TITLE  # noqa: E402
 from xiaoxin_client.ui_speedup import JunkFrame, ProcessFrame, BigFileFrame  # noqa: E402
 from xiaoxin_client.ui_chat import ChatFrame, ContractFrame  # noqa: E402
 from xiaoxin_client.ui_misc import DeviceFrame, MessageFrame, SoftwareFrame, SettingsFrame  # noqa: E402
@@ -53,20 +53,25 @@ class App:
         pump(self.root)
 
     def _build(self):
-        side = tk.Frame(self.root, bg=DARK, width=int(170 * self.k))
+        k = self.k
+        side = tk.Frame(self.root, bg=SIDEBAR, width=int(190 * k))
         side.pack(side="left", fill="y")
         side.pack_propagate(False)
-        tk.Label(side, text="小信助手", bg=DARK, fg="white", font=(FONT[0], 16, "bold"), pady=18).pack(fill="x")
-        self.nav_btns = {}
+        tk.Frame(self.root, bg=SEP, width=1).pack(side="left", fill="y")
+        tk.Label(side, text=APP_NAME, bg=SIDEBAR, fg=TEXT, font=(FONT[0], 15, "bold"), anchor="w").pack(fill="x", padx=int(20 * k), pady=(int(22 * k), 0))
+        tk.Label(side, text="信创终端智能助手", bg=SIDEBAR, fg=TEXT2, font=(FONT[0], 9), anchor="w").pack(fill="x", padx=int(20 * k), pady=(2, int(16 * k)))
+        self.nav = tk.StringVar()
         for key, label in NAV:
-            b = tk.Label(side, text="  " + label, bg=DARK, fg="#c9d3ea", anchor="w", font=(FONT[0], 11), pady=10, cursor="hand2")
-            b.pack(fill="x")
-            b.bind("<Button-1>", lambda e, k=key: self.show(k))
-            self.nav_btns[key] = b
-        self.status = tk.Label(side, text="连接中…", bg=DARK, fg="#8fa3c8", font=(FONT[0], 9), wraplength=int(150 * self.k), justify="left")
-        self.status.pack(side="bottom", fill="x", pady=10, padx=8)
-        self.body = ttk.Frame(self.root)
-        self.body.pack(side="left", fill="both", expand=True)
+            ttk.Radiobutton(side, text=label, value=key, variable=self.nav, style="Nav.TRadiobutton", cursor="hand2",
+                            takefocus=False, command=lambda k=key: self.show(k)).pack(fill="x", padx=int(10 * k), pady=1)
+        self.status = tk.Label(side, text="连接中…", bg=SIDEBAR, fg=TEXT2, font=(FONT[0], 9), wraplength=int(160 * k), justify="left", anchor="w")
+        self.status.pack(side="bottom", fill="x", pady=int(14 * k), padx=int(20 * k))
+        main = ttk.Frame(self.root)
+        main.pack(side="left", fill="both", expand=True)
+        self.title = ttk.Label(main, font=FONT_TITLE)
+        self.title.pack(anchor="w", padx=int(28 * k), pady=(int(22 * k), int(10 * k)))
+        self.body = ttk.Frame(main)
+        self.body.pack(fill="both", expand=True)
         self.pages = {}
         self.current = None
         self.show("speedup")
@@ -87,11 +92,11 @@ class App:
         self.root.lift()
         if self.current:
             self.pages[self.current].pack_forget()
-            self.nav_btns[self.current].config(bg=DARK, fg="#c9d3ea")
         if key not in self.pages:
             self.pages[key] = self._make(key)
-        self.pages[key].pack(fill="both", expand=True, padx=8, pady=8)
-        self.nav_btns[key].config(bg="#1d5bd8", fg="white")
+        self.pages[key].pack(fill="both", expand=True, padx=int(18 * self.k), pady=(0, int(12 * self.k)))
+        self.nav.set(key)
+        self.title.config(text=dict(NAV)[key])
         self.current = key
         if key == "message" and self.ball:
             self.ball.notify(False)
@@ -121,10 +126,11 @@ class App:
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
         k = self.k
         win.geometry("%dx%d+%d+%d" % (340 * k, 180 * k, sw - 360 * k, sh - 240 * k))
-        win.configure(bg="white")
-        tk.Label(win, text=m["title"], bg="white", font=FONT_B, anchor="w").pack(fill="x", padx=12, pady=(12, 4))
-        tk.Label(win, text=m["content"][:120], bg="white", wraplength=int(310 * k), justify="left", anchor="w").pack(fill="x", padx=12)
-        ttk.Button(win, text="查看（共%d条未读）" % len(msgs), command=lambda: (win.destroy(), self.show("message"))).pack(pady=10)
+        win.configure(bg=BG)
+        tk.Label(win, text=m["title"], bg=BG, fg=TEXT, font=FONT_B, anchor="w").pack(fill="x", padx=int(18 * k), pady=(int(16 * k), 4))
+        tk.Label(win, text=m["content"][:120], bg=BG, fg=TEXT2, wraplength=int(300 * k), justify="left", anchor="w").pack(fill="x", padx=int(18 * k))
+        ttk.Button(win, text="查看（共%d条未读）" % len(msgs), style="Accent.TButton",
+                   command=lambda: (win.destroy(), self.show("message"))).pack(side="bottom", pady=int(14 * k))
         win.after(15000, lambda: win.winfo_exists() and win.destroy())
 
     def on_hw_change(self, changes):

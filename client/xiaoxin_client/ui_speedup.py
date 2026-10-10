@@ -9,7 +9,7 @@ import psutil
 from . import cleaner, procmgr, bigfile
 from .cleaner import fmt_size
 from .config import IS_WIN
-from .ui_common import bg, ui, tree_with_scroll, Sparkline, FONT_B
+from .ui_common import bg, ui, tree_with_scroll, Sparkline, FONT_B, BG, BRAND, GREEN, ORANGE, RED
 
 
 class JunkFrame(ttk.Frame):
@@ -26,16 +26,16 @@ class JunkFrame(ttk.Frame):
         self.summary = ttk.Label(top, text="扫描系统缓存、日志、临时文件、APT 包缓存、Bash 历史、应用缓存等", style="Muted.TLabel")
         self.summary.pack(side="left", padx=8)
         self.pb = ttk.Progressbar(self, mode="determinate")
-        self.pb.pack(fill="x", pady=8)
+        self.pb.pack(fill="x", pady=(14, 6))
         self.ptext = ttk.Label(self, text="", style="Muted.TLabel")
-        self.ptext.pack(anchor="w")
+        self.ptext.pack(anchor="w", pady=(0, 6))
         f, self.tv = tree_with_scroll(self, ("size", "count", "admin"), ("大小", "文件数", "需授权"), [120, 90, 70], show="tree headings", height=16)
-        self.tv.heading("#0", text="垃圾分类（勾选：双击切换）")
+        self.tv.heading("#0", text="垃圾分类（勾选：双击切换）", anchor="w")
         self.tv.column("#0", width=380)
+        ttk.Label(self, text="提示：双击勾选/取消；右键查看该类别的具体文件详情", style="Muted.TLabel").pack(side="bottom", anchor="w", pady=(8, 0))
         f.pack(fill="both", expand=True)
         self.tv.bind("<Double-1>", self.toggle)
         self.tv.bind("<Button-3>", self.detail)
-        ttk.Label(self, text="提示：双击勾选/取消；右键查看该类别的具体文件详情", style="Muted.TLabel").pack(anchor="w", pady=4)
         self.result = {}
         self.checked = set()
 
@@ -100,8 +100,9 @@ class JunkFrame(ttk.Frame):
         win = tk.Toplevel(self)
         win.title("详细信息 - %s / %s" % (d[0], d[1]))
         win.geometry("760x420")
+        win.configure(bg=BG)
         f, tv = tree_with_scroll(win, ("path", "size"), ("文件", "大小"), [600, 100])
-        f.pack(fill="both", expand=True, padx=8, pady=8)
+        f.pack(fill="both", expand=True, padx=16, pady=16)
         for p, s in sorted(d[2]["files"], key=lambda x: -x[1])[:3000]:
             tv.insert("", "end", values=(p, fmt_size(s)))
 
@@ -128,19 +129,19 @@ class ProcessFrame(ttk.Frame):
         super().__init__(parent, padding=10)
         charts = ttk.Frame(self)
         charts.pack(fill="x")
-        self.sp = {"cpu": Sparkline(charts, "CPU", "#1d5bd8"), "mem": Sparkline(charts, "内存", "#29a37a"),
-                   "net": Sparkline(charts, "网络", "#e6a23c", maxv=0, unit="KB/s"), "disk": Sparkline(charts, "磁盘IO", "#d9534f", maxv=0, unit="KB/s")}
+        self.sp = {"cpu": Sparkline(charts, "CPU", BRAND), "mem": Sparkline(charts, "内存", GREEN),
+                   "net": Sparkline(charts, "网络", ORANGE, maxv=0, unit="KB/s"), "disk": Sparkline(charts, "磁盘IO", RED, maxv=0, unit="KB/s")}
         for s in self.sp.values():
-            s.pack(side="left", padx=4)
+            s.pack(side="left", fill="x", expand=True, padx=(0, 10))
         bar = ttk.Frame(self)
-        bar.pack(fill="x", pady=8)
-        ttk.Label(bar, text="排序：").pack(side="left")
+        bar.pack(fill="x", pady=12)
+        ttk.Label(bar, text="排序", style="Muted.TLabel").pack(side="left", padx=(0, 6))
         self.sort = tk.StringVar(value="cpu")
         for k, t in (("cpu", "CPU"), ("mem", "内存"), ("net", "网络连接"), ("disk", "磁盘IO")):
             ttk.Radiobutton(bar, text=t, value=k, variable=self.sort, command=self.render).pack(side="left")
-        ttk.Button(bar, text="刷新", command=self.refresh).pack(side="left", padx=8)
+        ttk.Button(bar, text="刷新", command=self.refresh).pack(side="left", padx=(16, 8))
         ttk.Button(bar, text="一键优化闲置进程", style="Accent.TButton", command=self.optimize).pack(side="left")
-        ttk.Button(bar, text="结束选中进程", command=self.kill_sel).pack(side="left", padx=8)
+        ttk.Button(bar, text="结束选中进程", style="Danger.TButton", command=self.kill_sel).pack(side="left", padx=8)
         self.info = ttk.Label(bar, text="", style="Muted.TLabel")
         self.info.pack(side="left")
         f, self.tv = tree_with_scroll(self, ("pid", "name", "user", "cpu", "mem", "disk", "net"),
@@ -207,7 +208,7 @@ class BigFileFrame(ttk.Frame):
         bar.pack(fill="x")
         ttk.Label(bar, text="扫描路径：").pack(side="left")
         self.path = tk.StringVar(value=";".join(bigfile.roots()) if IS_WIN else os.path.expanduser("~"))
-        ttk.Entry(bar, textvariable=self.path, width=28).pack(side="left")
+        ttk.Entry(bar, textvariable=self.path, width=20).pack(side="left")
         ttk.Label(bar, text=" 大于(MB)：").pack(side="left")
         self.min_mb = tk.IntVar(value=100)
         ttk.Spinbox(bar, from_=10, to=10240, textvariable=self.min_mb, width=6).pack(side="left")
@@ -215,16 +216,16 @@ class BigFileFrame(ttk.Frame):
         self.btn.pack(side="left", padx=8)
         ttk.Button(bar, text="停止", command=lambda: setattr(self, "stopping", True)).pack(side="left")
         ttk.Button(bar, text="全选", command=lambda: self.tv.selection_set(self.tv.get_children())).pack(side="left", padx=(16, 4))
-        ttk.Button(bar, text="删除选中", command=self.delete).pack(side="left")
+        ttk.Button(bar, text="删除选中", style="Danger.TButton", command=self.delete).pack(side="left")
         ttk.Button(bar, text="打开所在目录", command=self.open_dir).pack(side="left", padx=4)
         self.pb = ttk.Progressbar(self, mode="indeterminate")
         self.pb.pack(fill="x", pady=8)
         self.ptext = ttk.Label(self, text="", style="Muted.TLabel")
         self.ptext.pack(anchor="w")
         f, self.tv = tree_with_scroll(self, ("name", "size", "mtime", "path"), ("文件名", "大小", "更新时间", "路径"), [200, 90, 140, 480], height=15)
-        f.pack(fill="both", expand=True)
         self.stat = ttk.Label(self, text="", font=FONT_B)
-        self.stat.pack(anchor="w", pady=4)
+        self.stat.pack(side="bottom", anchor="w", pady=(8, 0))
+        f.pack(fill="both", expand=True)
         self.found = []
         self.stopping = False
 
