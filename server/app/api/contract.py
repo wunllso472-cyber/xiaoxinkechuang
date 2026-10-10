@@ -112,7 +112,9 @@ def detail(cid: int, db=Depends(get_db), who=Depends(actor)):
 @router.get("/{cid}/file")
 def file(cid: int, db=Depends(get_db), who=Depends(actor)):
     c = db.get(Contract, cid)
-    return FileResponse(c.file_path, filename=c.filename)
+    path, name = c.file_path, c.filename
+    db.close()  # 传输文件前先归还数据库连接
+    return FileResponse(path, filename=name)
 
 
 @router.post("/{cid}/reanalyze")

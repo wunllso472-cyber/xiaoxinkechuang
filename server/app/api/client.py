@@ -183,4 +183,6 @@ def download(kind: str, item_id: int, db=Depends(get_db)):
     obj = db.get(ClientVersion if kind == "version" else Software, item_id)
     if not obj or not obj.file_path or not os.path.exists(obj.file_path):
         raise HTTPException(404, "文件不存在")
-    return FileResponse(obj.file_path, filename=os.path.basename(obj.file_path).split("_", 1)[-1])
+    path = obj.file_path
+    db.close()  # 大文件传输可能持续很久，先归还数据库连接，否则并发下载会占满连接池
+    return FileResponse(path, filename=os.path.basename(path).split("_", 1)[-1])
